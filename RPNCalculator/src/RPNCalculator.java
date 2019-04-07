@@ -1,6 +1,19 @@
+import org.apache.commons.collections4.CollectionUtils;
+
+import java.util.Arrays;
+import java.util.List;
 import java.util.Stack;
 
 public class RPNCalculator {
+
+    private static final List<String> operators = Arrays.asList("+", "-", "*", "/", "sqrt");
+    public static final String add = "+";
+    public static final String subtract = "-";
+    public static final String multiply = "*";
+    public static final String divide = "/";
+    public static final String sqrt = "sqrt";
+    public static final String undo = "undo";
+    public static final String clear = "clear";
 
     // track the whole inputs
     private Stack<String> trackStack = new Stack<>();
@@ -9,103 +22,69 @@ public class RPNCalculator {
     private Stack<Double> calculateStack = new Stack<>();
 
     public void calculate(String expr) throws RPNCalculatorException {
-        for (String token : expr.split("\\s+")) {
-            switch (token) {
-                case "+":
-                    add();
-                    break;
-                case "-":
-                    subtract();
-                    break;
-                case "*":
-                    multiply();
-                    break;
-                case "/":
-                    divide();
-                    break;
-                case "sqrt":
-                    sqrt();
-                    break;
-                case "undo":
-                    undo();
-                    break;
-                case "clear":
-                    clearExpr();
-                    break;
-                default:
-                    try {
-                        double number = Double.parseDouble(token);
-                        trackStack.push(String.valueOf(number));
-                        calculateStack.push(number);
-                    } catch (NumberFormatException e) {
-                        System.out.println("Invalid input of number");
+        String[] input = expr.split("\\s+");
+        for (String token : input) {
+            if (token.equals(undo)) {
+                undo();
+                continue;
+            }
+            if (token.equals(clear)) {
+                clearExpr();
+                continue;
+            }
+
+            if (isOperator(token)) {
+                boolean isSqrt = token.equals(sqrt);
+                double[] nums = arithmeticPreProcess(isSqrt, token);
+                ResultEntity resultEntity = null;
+                if (isSqrt) {
+                    resultEntity = new ResultEntity(nums[0]);
+                    resultEntity.sqrt();
+                } else {
+                    resultEntity = new ResultEntity((nums[0]));
+                    if (token.equals(add)) {
+                        resultEntity.add(new ResultEntity(nums[1]));
+                    } else if (token.equals(subtract)) {
+                        resultEntity.sub(new ResultEntity(nums[1]));
+                    } else if (token.equals(multiply)) {
+                        resultEntity.multiply(new ResultEntity(nums[1]));
+                    } else {
+                        resultEntity.divide(new ResultEntity(nums[1]));
                     }
-                    break;
+                }
+                trackStack.push(token);
+                calculateStack.push(resultEntity.getResult());
+                continue;
+            }
+
+            try {
+                double number = Double.parseDouble(token);
+                trackStack.push(String.valueOf(number));
+                calculateStack.push(number);
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid input of number");
             }
         }
     }
 
-    private double[] arithmeticPreProcess() {
-        if (calculateStack.empty() || calculateStack.size() < 2) {
-            return null;
+    private boolean isOperator(String s) {
+        return operators.contains(s);
+    }
+    private double[] arithmeticPreProcess(boolean isSqrt, String token) throws RPNCalculatorException {
+        if (CollectionUtils.isEmpty(calculateStack)) {
+            throw new RPNCalculatorException("operator " + token + "(position: " + locateInsuffParams() + "): insufficient parameters");
         }
         double first = 0, second = 0;
+        if (isSqrt) {
+            first = calculateStack.pop();
+            return new double[]{first};
+        }
+        if (calculateStack.size() < 2) {
+            throw new RPNCalculatorException("operator " + token + "(position: " + locateInsuffParams() + "): insufficient parameters");
+        }
         first = calculateStack.pop();
         second = calculateStack.pop();
         return new double[]{first, second} ;
-    }
-
-    private void add() throws RPNCalculatorException {
-        trackStack.push("+");
-        double[] temp = arithmeticPreProcess();
-        if (temp == null) {
-            throw new RPNCalculatorException("operator + (position: " + (trackStack.size() * 2 - 1) + "): insufficient parameters");
-        }
-        calculateStack.push(temp[1] + temp[0]);
-    }
-
-    private void subtract() throws RPNCalculatorException {
-        trackStack.push("-");
-        double[] temp = arithmeticPreProcess();
-        if (temp == null) {
-            throw new RPNCalculatorException("operator - (position: " + (trackStack.size()* 2 - 1) + "): insufficient parameters");
-        }
-        calculateStack.push(temp[1] - temp[0]);
-
-    }
-
-    private void multiply() throws RPNCalculatorException {
-        trackStack.push("*");
-        double[] temp = arithmeticPreProcess();
-        if (temp == null) {
-            throw new RPNCalculatorException("operator * (position: " + (trackStack.size()* 2 - 1) + "): insufficient parameters");
-        }
-        calculateStack.push(temp[1] * temp[0]);
-    }
-
-    private void divide() throws RPNCalculatorException {
-        trackStack.push("/");
-        double[] temp = arithmeticPreProcess();
-        if (temp == null) {
-            throw new RPNCalculatorException("operator * (position: " + (trackStack.size()* 2 - 1) + "): insufficient parameters");
-        }
-        if (temp[0] == 0) {
-            throw new RPNCalculatorException("divisor cannot be zero");
-        }
-        calculateStack.push(temp[1] / temp[0]);
-    }
-
-    private void sqrt() throws RPNCalculatorException {
-        trackStack.push("sqrt");
-        if (calculateStack.empty() || calculateStack.size() < 1) {
-            throw new RPNCalculatorException("operator sqrt (position: " + (trackStack.size() * 2 - 1) + "): insufficient parameters");
-        }
-        double number = 0;
-        number = calculateStack.pop();
-        if (number < 0) {
-            throw new RPNCalculatorException("negative number sqrt not supported");
-        }
-        calculateStack.push(Math.sqrt(number));
     }
 
     private void undo() throws RPNCalculatorException {
@@ -126,6 +105,10 @@ public class RPNCalculator {
     private void clearExpr() {
         trackStack.clear();
         calculateStack.clear();
+    }
+
+    private String locateInsuffParams() {
+        return String.valueOf(trackStack.size() * 2);
     }
 
     public void displayCalculateStack() {
